@@ -158,7 +158,9 @@ class WorldCupRepository(IWorldCupRepository):
             self._sqldb.execute("DELETE FROM matches WHERE match_id = ?", (match_id,))
 
     def list_matches(self) -> list[Match]:
-        rows = self._sqldb.execute("SELECT * FROM matches ORDER BY match_date").fetchall()
+        rows = self._sqldb.execute(
+            "SELECT * FROM matches ORDER BY match_date"
+        ).fetchall()
         return [Match.from_row(r) for r in rows]
 
     def get_match_for_given_team(self, team_id: int) -> list[Match]:

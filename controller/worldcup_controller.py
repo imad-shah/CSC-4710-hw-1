@@ -106,7 +106,6 @@ class WorldCupController(IWorldCupController):
             name=_required_text(name, "Player name"),
             team_id=self._existing_team_id(team_id),
             position=_text(position),
-            # Blank ID means a new player; SQLite assigns one.
             player_id=_int(player_id, "Player ID"),
         )
         self._repo.upsert_player(player)
