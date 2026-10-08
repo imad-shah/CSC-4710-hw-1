@@ -25,12 +25,6 @@ CREATE TABLE IF NOT EXISTS matches (
     away_score    INTEGER,
     CHECK (home_team_id <> away_team_id)
 );
-CREATE TABLE IF NOT EXISTS match_players (
-    match_id   INTEGER NOT NULL REFERENCES matches(match_id) ON DELETE CASCADE,
-    player_id  INTEGER NOT NULL REFERENCES players(player_id) ON DELETE CASCADE,
-    goals      INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (match_id, player_id)
-);
 """
 
 

@@ -1,3 +1,4 @@
+import sqlite3
 from abc import ABC, abstractmethod
 
 from models import Player, Match, Team
@@ -17,7 +18,7 @@ class IWorldCupRepository(ABC):
         pass
 
     @abstractmethod
-    def get_team(self, t: Team) -> Team:
+    def get_team(self, t: Team) -> Team | None:
         pass
 
     @abstractmethod
@@ -29,7 +30,7 @@ class IWorldCupRepository(ABC):
         pass
 
     @abstractmethod
-    def get_match(self, m: Match) -> Match:
+    def get_match(self, m: Match) -> Match | None:
         pass
 
     @abstractmethod
@@ -41,75 +42,122 @@ class IWorldCupRepository(ABC):
         pass
 
     @abstractmethod
-    def get_match_for_given_team(self, t: Team) -> Match:
+    def get_match_for_given_team(self, t: Team) -> list[Match]:
         pass
 
     @abstractmethod
-    def get_match_for_given_player(self, p: Player) -> Match:
+    def get_match_for_given_player(self, p: Player) -> list[Match]:
         pass
 
 
 class WorldCupRepository(IWorldCupRepository):
-    def __init__(self, sqldb) -> None:
+    def __init__(self, sqldb: sqlite3.Connection) -> None:
         self._sqldb = sqldb
 
     def get_player(self, p: Player) -> Player | None:
-        cursor = self._sqldb.cursor()
-        cursor.execute("""SELECT player from Players WHERE player.name == p.name""")
-        row = cursor.fetchone()
-        if not row:
-            return None
-        return Player(*row)
+        row = self._sqldb.execute(
+            "SELECT * FROM players WHERE player_id = ?", (p.player_id,)
+        ).fetchone()
+        return Player.from_row(row) if row else None
 
     def upsert_player(self, p: Player) -> None:
-        cursor = self._sqldb.cursor()
-        cursor.execute(""""
-    INSERT INTO users (id, name, email)
-    VALUES (?, ?, ?)
-    ON CONFLICT(id) 
-    DO UPDATE SET 
-        name = excluded.name,
-        email = excluded.email;
-        """)
-        row = cursor.fetchone()
-        if not row:
-            return None
-        return Player(*row)
+        with self._sqldb:
+            self._sqldb.execute(
+                """
+                INSERT INTO players (player_id, name, position, team_id)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(player_id) DO UPDATE SET
+                    name = excluded.name,
+                    position = excluded.position,
+                    team_id = excluded.team_id
+                """,
+                (p.player_id, p.name, p.position, p.team_id),
+            )
 
     def delete_player(self, p: Player) -> None:
-        pass
+        with self._sqldb:
+            self._sqldb.execute(
+                "DELETE FROM players WHERE player_id = ?", (p.player_id,)
+            )
 
-    def get_team(self, t: Team) -> Team:
-        pass
+    def get_team(self, t: Team) -> Team | None:
+        row = self._sqldb.execute(
+            "SELECT * FROM teams WHERE team_id = ?", (t.team_id,)
+        ).fetchone()
+        return Team.from_row(row) if row else None
 
     def upsert_team(self, t: Team) -> None:
-        pass
+        with self._sqldb:
+            self._sqldb.execute(
+                """
+                INSERT INTO teams (team_id, name, coach)
+                VALUES (?, ?, ?)
+                ON CONFLICT(team_id) DO UPDATE SET
+                    name = excluded.name,
+                    coach = excluded.coach
+                """,
+                (t.team_id, t.name, t.coach),
+            )
 
     def delete_team(self, t: Team) -> None:
-        pass
+        with self._sqldb:
+            self._sqldb.execute("DELETE FROM teams WHERE team_id = ?", (t.team_id,))
 
-    def get_match(self, m: Match) -> Match:
-        pass
+    def get_match(self, m: Match) -> Match | None:
+        row = self._sqldb.execute(
+            "SELECT * FROM matches WHERE match_id = ?", (m.match_id,)
+        ).fetchone()
+        return Match.from_row(row) if row else None
 
     def upsert_match(self, m: Match) -> None:
-        pass
+        with self._sqldb:
+            self._sqldb.execute(
+                """
+                INSERT INTO matches (match_id, home_team_id, away_team_id,
+                                     match_date, venue, home_score, away_score)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(match_id) DO UPDATE SET
+                    home_team_id = excluded.home_team_id,
+                    away_team_id = excluded.away_team_id,
+                    match_date = excluded.match_date,
+                    venue = excluded.venue,
+                    home_score = excluded.home_score,
+                    away_score = excluded.away_score
+                """,
+                (
+                    m.match_id,
+                    m.home_team_id,
+                    m.away_team_id,
+                    m.match_date,
+                    m.venue,
+                    m.home_score,
+                    m.away_score,
+                ),
+            )
 
     def delete_match(self, m: Match) -> None:
-        pass
+        with self._sqldb:
+            self._sqldb.execute("DELETE FROM matches WHERE match_id = ?", (m.match_id,))
 
-    def get_match_for_given_team(self, t: Team) -> Match:
-        pass
+    def get_match_for_given_team(self, t: Team) -> list[Match]:
+        rows = self._sqldb.execute(
+            """
+            SELECT * FROM matches
+            WHERE home_team_id = :team_id OR away_team_id = :team_id
+            ORDER BY match_date
+            """,
+            {"team_id": t.team_id},
+        ).fetchall()
+        return [Match.from_row(r) for r in rows]
 
-    def get_match_for_given_player(self, p: Player) -> Match:
-        pass
-
-
-"""
-upsert_query = '''
-    INSERT INTO users (id, name, email)
-    VALUES (?, ?, ?)
-    ON CONFLICT(id) 
-    DO UPDATE SET 
-        name = excluded.name,
-        email = excluded.email;
-"""
+    def get_match_for_given_player(self, p: Player) -> list[Match]:
+        rows = self._sqldb.execute(
+            """
+            SELECT m.* FROM matches m
+            JOIN players p ON p.team_id IN (m.home_team_id, m.away_team_id)
+            WHERE p.player_id = ?
+            ORDER BY m.match_date
+            """,
+            (p.player_id,),
+        ).fetchall()
+        return [Match.from_row(r) for r in rows]
