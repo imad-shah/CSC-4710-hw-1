@@ -5,7 +5,7 @@ import sqlite3
 @dataclass(slots=True)
 class Team:
     name: str
-    coach: str
+    coach: str | None
     team_id: int
 
     @classmethod
